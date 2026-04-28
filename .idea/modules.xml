@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/mastering-distributed-transaction.iml" filepath="$PROJECT_DIR$/mastering-distributed-transaction.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/monolith.main.iml" filepath="$PROJECT_DIR$/.idea/modules/monolith.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/monolith.test.iml" filepath="$PROJECT_DIR$/.idea/modules/monolith.test.iml" />
+    </modules>
+  </component>
+</project>
