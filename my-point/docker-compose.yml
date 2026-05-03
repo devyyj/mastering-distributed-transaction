@@ -10,4 +10,7 @@ services:
     ports:
       - "3308:3306"
     volumes:
-      - ./data/mariadb:/var/lib/mysql
+      - point-db-data:/var/lib/mysql
+
+volumes:
+  point-db-data:
