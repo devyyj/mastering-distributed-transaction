@@ -1,0 +1,19 @@
+### MSA 주문 통합 테스트
+
+### 1. 주문 생성 요청 (my-order 호출)
+# my-order(8081) -> my-point(8082) -> my-payment(8083) 순서로 내부 호출 발생
+POST http://localhost:8081/api/v1/orders
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "productPrice": 10000,
+  "usePoint": 2000
+}
+
+### 2. 포인트 잔액 확인 (my-point)
+# 초기 10,000에서 2,000 차감되어 8,000 예상
+# (참고: 별도의 조회 API는 구현되지 않았으나 DB 확인 가능)
+
+### 3. 결제 내역 확인 (my-payment)
+# 8,000원 결제 내역 생성 예상
