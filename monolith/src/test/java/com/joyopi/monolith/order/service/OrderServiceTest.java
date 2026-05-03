@@ -1,7 +1,9 @@
 package com.joyopi.monolith.order.service;
 
+import com.joyopi.monolith.common.exception.BusinessException;
+import com.joyopi.monolith.common.exception.ErrorCode;
 import com.joyopi.monolith.order.domain.Order;
-import com.joyopi.monolith.order.domain.OrderRepository;
+import com.joyopi.monolith.order.repository.OrderRepository;
 import com.joyopi.monolith.order.domain.OrderStatus;
 import com.joyopi.monolith.order.service.dto.OrderCommand;
 import com.joyopi.monolith.payment.service.PaymentService;
@@ -14,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -53,5 +56,21 @@ class OrderServiceTest {
         verify(pointService).usePoint(command.getUserId(), command.getUsePoint());
         verify(paymentService).pay(any(), any());
         assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("상품 가격이 음수이면 예외가 발생한다")
+    void order_negativeProductPrice() {
+        // given
+        OrderCommand command = OrderCommand.builder()
+                .userId(1L)
+                .productPrice(-1000L)
+                .usePoint(0L)
+                .build();
+
+        // when & then
+        assertThatThrownBy(() -> orderService.order(command))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(ErrorCode.INVALID_INPUT_VALUE.getMessage());
     }
 }

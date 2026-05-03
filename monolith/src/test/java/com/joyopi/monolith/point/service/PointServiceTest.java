@@ -3,7 +3,7 @@ package com.joyopi.monolith.point.service;
 import com.joyopi.monolith.common.exception.BusinessException;
 import com.joyopi.monolith.common.exception.ErrorCode;
 import com.joyopi.monolith.point.domain.Point;
-import com.joyopi.monolith.point.domain.PointRepository;
+import com.joyopi.monolith.point.repository.PointRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

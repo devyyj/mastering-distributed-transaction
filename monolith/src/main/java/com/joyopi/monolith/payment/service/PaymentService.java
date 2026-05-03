@@ -3,7 +3,7 @@ package com.joyopi.monolith.payment.service;
 import com.joyopi.monolith.common.exception.BusinessException;
 import com.joyopi.monolith.common.exception.ErrorCode;
 import com.joyopi.monolith.payment.domain.Payment;
-import com.joyopi.monolith.payment.domain.PaymentRepository;
+import com.joyopi.monolith.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

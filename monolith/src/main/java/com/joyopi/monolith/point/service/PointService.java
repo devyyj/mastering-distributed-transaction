@@ -1,7 +1,7 @@
 package com.joyopi.monolith.point.service;
 
 import com.joyopi.monolith.point.domain.Point;
-import com.joyopi.monolith.point.domain.PointRepository;
+import com.joyopi.monolith.point.repository.PointRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

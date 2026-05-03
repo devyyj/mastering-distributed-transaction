@@ -1,5 +1,7 @@
 package com.joyopi.monolith.order.domain;
 
+import com.joyopi.monolith.common.exception.BusinessException;
+import com.joyopi.monolith.common.exception.ErrorCode;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -35,6 +37,9 @@ public class Order {
     private OrderStatus status;
 
     private Order(Long userId, Long productPrice, Long usePoint) {
+        if (productPrice < 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
         this.userId = userId;
         this.productPrice = productPrice;
         this.usePoint = usePoint;

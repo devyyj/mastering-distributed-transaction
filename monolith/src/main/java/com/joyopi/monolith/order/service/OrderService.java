@@ -1,7 +1,7 @@
 package com.joyopi.monolith.order.service;
 
 import com.joyopi.monolith.order.domain.Order;
-import com.joyopi.monolith.order.domain.OrderRepository;
+import com.joyopi.monolith.order.repository.OrderRepository;
 import com.joyopi.monolith.order.service.dto.OrderCommand;
 import com.joyopi.monolith.payment.service.PaymentService;
 import com.joyopi.monolith.point.service.PointService;

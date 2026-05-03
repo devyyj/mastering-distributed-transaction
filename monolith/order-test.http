@@ -4,8 +4,8 @@ Content-Type: application/json
 
 {
   "userId": 1,
-  "productPrice": 50000,
-  "usePoint": 5000
+  "productPrice": -10000,
+  "usePoint": 1000
 }
 
 ### 2. 정상 주문 (추가 주문)
