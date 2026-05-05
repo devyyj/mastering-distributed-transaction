@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -71,5 +72,22 @@ class PointServiceTest {
         assertThatThrownBy(() -> pointService.usePoint(userId, useAmount))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage(ErrorCode.INVALID_INPUT_VALUE.getMessage());
+    }
+
+    @Test
+    @DisplayName("포인트를 복구하면 잔액이 증가하고 저장된다")
+    void restorePoint() {
+        // given
+        Long userId = 1L;
+        Long restoreAmount = 3000L;
+        Point point = Point.create(userId); // 10,000 balance
+        given(pointRepository.findById(userId)).willReturn(Optional.of(point));
+
+        // when
+        pointService.restorePoint(userId, restoreAmount);
+
+        // then
+        assertThat(point.getBalance()).isEqualTo(13000L);
+        verify(pointRepository).save(point);
     }
 }

@@ -12,7 +12,7 @@ Content-Type: application/json
 
 {
   "userId": 1,
-  "productPrice": 10000000,
+  "productPrice": 100000,
   "usePoint": 2000
 }
 
@@ -55,9 +55,9 @@ POST {{order_host}}/api/v1/orders
 Content-Type: application/json
 
 {
-  "userId": 5,
+  "userId": 1,
   "productPrice": 1500000,
-  "usePoint": 0
+  "usePoint": 3000
 }
 
 ### [복합 시나리오] 6. 연속 주문 (잔액 소진 테스트)

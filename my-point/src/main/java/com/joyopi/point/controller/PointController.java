@@ -20,4 +20,10 @@ public class PointController {
         pointService.usePoint(request.getUserId(), request.getAmount());
         return ApiResponse.success(null);
     }
+
+    @PostMapping("/restore")
+    public ApiResponse<Void> restorePoint(@RequestBody PointRequest request) {
+        pointService.restorePoint(request.getUserId(), request.getAmount());
+        return ApiResponse.success(null);
+    }
 }

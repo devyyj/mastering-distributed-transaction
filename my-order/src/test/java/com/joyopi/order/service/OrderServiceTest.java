@@ -62,18 +62,40 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("상품 가격이 음수이면 예외가 발생한다")
-    void order_negativeProductPrice() {
+    @DisplayName("결제 처리 중 예외 발생 시 포인트 복구 API를 호출하고 주문 상태가 FAIL이 된다")
+    void order_paymentFail_compensation() throws Exception {
         // given
         OrderCommand command = OrderCommand.builder()
                 .userId(1L)
-                .productPrice(-1000L)
-                .usePoint(0L)
+                .productPrice(10000L)
+                .usePoint(2000L)
                 .build();
+
+        Order order = Order.create(command.getUserId(), command.getProductPrice(), command.getUsePoint());
+        java.lang.reflect.Field idField = Order.class.getDeclaredField("id");
+        idField.setAccessible(true);
+        idField.set(order, 1L);
+
+        given(orderRepository.save(any(Order.class))).willReturn(order);
+        
+        // 포인트 차감 성공
+        given(restTemplate.postForEntity(contains("points/use"), any(), eq(Void.class)))
+                .willReturn(ResponseEntity.ok().build());
+        
+        // 결제 처리 실패
+        given(restTemplate.postForEntity(contains("payments"), any(), eq(Void.class)))
+                .willThrow(new RuntimeException("Payment failed"));
+
+        // 포인트 복구 성공
+        given(restTemplate.postForEntity(contains("points/restore"), any(), eq(Void.class)))
+                .willReturn(ResponseEntity.ok().build());
 
         // when & then
         assertThatThrownBy(() -> orderService.order(command))
-                .isInstanceOf(BusinessException.class)
-                .hasMessage(ErrorCode.INVALID_INPUT_VALUE.getMessage());
+                .isInstanceOf(RuntimeException.class);
+
+        // then
+        verify(restTemplate).postForEntity(contains("points/restore"), any(), eq(Void.class));
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.FAILED);
     }
 }

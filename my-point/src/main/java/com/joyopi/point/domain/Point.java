@@ -49,4 +49,14 @@ public class Point {
         }
         this.balance -= amount;
     }
+
+    /**
+     * 포인트 복구 (보상 트랜잭션용)
+     */
+    public void restore(Long amount) {
+        if (amount < 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        this.balance += amount;
+    }
 }
