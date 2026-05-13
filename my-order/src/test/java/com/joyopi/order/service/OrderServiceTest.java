@@ -34,7 +34,7 @@ class OrderServiceTest {
     private RestTemplate restTemplate;
 
     @Test
-    @DisplayName("주문 요청이 들어오면 포인트 차감, 결제 처리 후 주문이 완료된다")
+    @DisplayName("TCC: 주문 요청이 들어오면 모든 Try 성공 후 Confirm이 호출되고 주문이 완료된다")
     void order_success() throws Exception {
         // given
         OrderCommand command = OrderCommand.builder()
@@ -56,14 +56,20 @@ class OrderServiceTest {
         Long orderId = orderService.order(command);
 
         // then
-        verify(restTemplate).postForEntity(contains("points"), any(), eq(Void.class));
-        verify(restTemplate).postForEntity(contains("payments"), any(), eq(Void.class));
+        // Try 단계 호출 확인
+        verify(restTemplate).postForEntity(contains("points/try"), any(), eq(Void.class));
+        verify(restTemplate).postForEntity(contains("payments/try"), any(), eq(Void.class));
+        
+        // Confirm 단계 호출 확인
+        verify(restTemplate).postForEntity(contains("points/confirm"), any(), eq(Void.class));
+        verify(restTemplate).postForEntity(contains("payments/confirm"), any(), eq(Void.class));
+        
         assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED);
     }
 
     @Test
-    @DisplayName("결제 처리 중 예외 발생 시 포인트 복구 API를 호출하고 주문 상태가 FAIL이 된다")
-    void order_paymentFail_compensation() throws Exception {
+    @DisplayName("TCC: 결제 Try 실패 시 포인트 Cancel API를 호출하고 주문 상태가 CANCELLED가 된다")
+    void order_paymentTryFail_cancel() throws Exception {
         // given
         OrderCommand command = OrderCommand.builder()
                 .userId(1L)
@@ -78,16 +84,16 @@ class OrderServiceTest {
 
         given(orderRepository.save(any(Order.class))).willReturn(order);
         
-        // 포인트 차감 성공
-        given(restTemplate.postForEntity(contains("points/use"), any(), eq(Void.class)))
+        // [Try] 포인트 예약 성공
+        given(restTemplate.postForEntity(contains("points/try"), any(), eq(Void.class)))
                 .willReturn(ResponseEntity.ok().build());
         
-        // 결제 처리 실패
-        given(restTemplate.postForEntity(contains("payments"), any(), eq(Void.class)))
-                .willThrow(new RuntimeException("Payment failed"));
+        // [Try] 결제 예약 실패
+        given(restTemplate.postForEntity(contains("payments/try"), any(), eq(Void.class)))
+                .willThrow(new RuntimeException("Payment try failed"));
 
-        // 포인트 복구 성공
-        given(restTemplate.postForEntity(contains("points/restore"), any(), eq(Void.class)))
+        // [Cancel] 포인트 예약 취소 성공
+        given(restTemplate.postForEntity(contains("points/cancel"), any(), eq(Void.class)))
                 .willReturn(ResponseEntity.ok().build());
 
         // when & then
@@ -95,7 +101,8 @@ class OrderServiceTest {
                 .isInstanceOf(RuntimeException.class);
 
         // then
-        verify(restTemplate).postForEntity(contains("points/restore"), any(), eq(Void.class));
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.FAILED);
+        verify(restTemplate).postForEntity(contains("points/cancel"), any(), eq(Void.class));
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     }
+
 }

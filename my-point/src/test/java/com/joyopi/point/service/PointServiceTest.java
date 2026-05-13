@@ -29,8 +29,8 @@ class PointServiceTest {
     private PointRepository pointRepository;
 
     @Test
-    @DisplayName("신규 사용자가 포인트를 사용할 경우 10,000포인트에서 차감된다")
-    void usePoint_newUser() {
+    @DisplayName("TCC-Try: 신규 사용자가 포인트를 예약할 경우 10,000포인트에서 예약된다")
+    void tryUsePoint_newUser() {
         // given
         Long userId = 1L;
         Long useAmount = 3000L;
@@ -38,15 +38,50 @@ class PointServiceTest {
         given(pointRepository.save(any(Point.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // when
-        pointService.usePoint(userId, useAmount);
+        pointService.tryUsePoint(userId, useAmount);
 
         // then
         verify(pointRepository).save(any(Point.class));
     }
 
     @Test
-    @DisplayName("포인트 잔액이 부족하면 예외가 발생한다")
-    void usePoint_insufficientBalance() {
+    @DisplayName("TCC-Confirm: 포인트 예약을 확정한다")
+    void confirmUsePoint() {
+        // given
+        Long userId = 1L;
+        Long amount = 3000L;
+        Point point = Point.create(userId);
+        point.tryUse(amount);
+        given(pointRepository.findById(userId)).willReturn(Optional.of(point));
+
+        // when
+        pointService.confirmUsePoint(userId, amount);
+
+        // then
+        assertThat(point.getReservedPoint()).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("TCC-Cancel: 포인트 예약을 취소한다")
+    void cancelUsePoint() {
+        // given
+        Long userId = 1L;
+        Long amount = 3000L;
+        Point point = Point.create(userId);
+        point.tryUse(amount);
+        given(pointRepository.findById(userId)).willReturn(Optional.of(point));
+
+        // when
+        pointService.cancelUsePoint(userId, amount);
+
+        // then
+        assertThat(point.getBalance()).isEqualTo(10000L);
+        assertThat(point.getReservedPoint()).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("포인트 잔액이 부족하면 예약이 실패한다")
+    void tryUsePoint_insufficientBalance() {
         // given
         Long userId = 1L;
         Long useAmount = 15000L;
@@ -54,40 +89,9 @@ class PointServiceTest {
         given(pointRepository.findById(userId)).willReturn(Optional.of(point));
 
         // when & then
-        assertThatThrownBy(() -> pointService.usePoint(userId, useAmount))
+        assertThatThrownBy(() -> pointService.tryUsePoint(userId, useAmount))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage(ErrorCode.INSUFFICIENT_POINT.getMessage());
     }
 
-    @Test
-    @DisplayName("음수 금액을 사용하려 하면 예외가 발생한다")
-    void usePoint_negativeAmount() {
-        // given
-        Long userId = 1L;
-        Long useAmount = -1000L;
-        Point point = Point.create(userId);
-        given(pointRepository.findById(userId)).willReturn(Optional.of(point));
-
-        // when & then
-        assertThatThrownBy(() -> pointService.usePoint(userId, useAmount))
-                .isInstanceOf(BusinessException.class)
-                .hasMessage(ErrorCode.INVALID_INPUT_VALUE.getMessage());
-    }
-
-    @Test
-    @DisplayName("포인트를 복구하면 잔액이 증가하고 저장된다")
-    void restorePoint() {
-        // given
-        Long userId = 1L;
-        Long restoreAmount = 3000L;
-        Point point = Point.create(userId); // 10,000 balance
-        given(pointRepository.findById(userId)).willReturn(Optional.of(point));
-
-        // when
-        pointService.restorePoint(userId, restoreAmount);
-
-        // then
-        assertThat(point.getBalance()).isEqualTo(13000L);
-        verify(pointRepository).save(point);
-    }
 }

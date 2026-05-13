@@ -15,15 +15,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class PointController {
     private final PointService pointService;
 
-    @PostMapping("/use")
-    public ApiResponse<Void> usePoint(@RequestBody PointRequest request) {
-        pointService.usePoint(request.getUserId(), request.getAmount());
+    @PostMapping("/try")
+    public ApiResponse<Void> tryUsePoint(@RequestBody PointRequest request) {
+        pointService.tryUsePoint(request.getUserId(), request.getAmount());
         return ApiResponse.success(null);
     }
 
-    @PostMapping("/restore")
-    public ApiResponse<Void> restorePoint(@RequestBody PointRequest request) {
-        pointService.restorePoint(request.getUserId(), request.getAmount());
+    @PostMapping("/confirm")
+    public ApiResponse<Void> confirmUsePoint(@RequestBody PointRequest request) {
+        pointService.confirmUsePoint(request.getUserId(), request.getAmount());
         return ApiResponse.success(null);
     }
+
+    @PostMapping("/cancel")
+    public ApiResponse<Void> cancelUsePoint(@RequestBody PointRequest request) {
+        pointService.cancelUsePoint(request.getUserId(), request.getAmount());
+        return ApiResponse.success(null);
+    }
+
 }

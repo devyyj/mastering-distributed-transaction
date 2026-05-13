@@ -35,10 +35,10 @@ public class Payment {
     }
 
     /**
-     * 성공한 결제 생성
+     * TCC - Try: 결제 예약 생성
      */
-    public static Payment createSuccess(Long orderId, Long amount) {
-        return new Payment(orderId, amount, PaymentStatus.COMPLETED);
+    public static Payment createReserved(Long orderId, Long amount) {
+        return new Payment(orderId, amount, PaymentStatus.RESERVED);
     }
 
     /**
@@ -47,4 +47,33 @@ public class Payment {
     public static Payment createFailed(Long orderId, Long amount) {
         return new Payment(orderId, amount, PaymentStatus.FAILED);
     }
+
+
+    /**
+     * TCC - Confirm: 결제 확정
+     */
+    public void confirm() {
+        if (this.status != PaymentStatus.RESERVED) {
+            throw new IllegalStateException("예약된 결제만 확정할 수 있습니다.");
+        }
+        this.status = PaymentStatus.COMPLETED;
+    }
+
+    /**
+     * TCC - Cancel: 결제 취소
+     */
+    public void cancel() {
+        if (this.status != PaymentStatus.RESERVED) {
+            throw new IllegalStateException("예약된 결제만 취소할 수 있습니다.");
+        }
+        this.status = PaymentStatus.CANCELLED;
+    }
+
+    /**
+     * 결제 실패 처리
+     */
+    public void fail() {
+        this.status = PaymentStatus.FAILED;
+    }
+
 }

@@ -22,17 +22,15 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final RestTemplate restTemplate;
 
-    private static final String POINT_SERVICE_URL = "http://localhost:8082/api/points/use";
-    private static final String POINT_RESTORE_URL = "http://localhost:8082/api/points/restore";
-    private static final String PAYMENT_SERVICE_URL = "http://localhost:8083/api/payments";
+    private static final String POINT_BASE_URL = "http://localhost:8082/api/points";
+    private static final String PAYMENT_BASE_URL = "http://localhost:8083/api/payments";
 
     /**
-     * 주문 생성 및 결제 프로세스 실행
-     * RuntimeException 발생 시에도 롤백하지 않고 상태를 저장하기 위해 noRollbackFor 설정
+     * TCC 기반 주문 프로세스 실행
      */
     @Transactional(noRollbackFor = Exception.class)
     public Long order(OrderCommand command) {
-        log.info("주문 프로세스 시작 - userId: {}, productPrice: {}", command.getUserId(), command.getProductPrice());
+        log.info("TCC 주문 프로세스 시작 - userId: {}, productPrice: {}", command.getUserId(), command.getProductPrice());
 
         // 1. 주문 생성 (PENDING)
         Order order = orderRepository.save(Order.create(
@@ -41,40 +39,71 @@ public class OrderService {
                 command.getUsePoint()
         ));
 
+        boolean pointTrySuccess = false;
+        boolean paymentTrySuccess = false;
+
         try {
-            // 2. 포인트 차감 (my-point 호출)
-            log.info("포인트 차감 시도 - userId: {}, amount: {}", command.getUserId(), command.getUsePoint());
-            restTemplate.postForEntity(POINT_SERVICE_URL, 
+            // [Try 단계]
+            order.reserve(); // 주문 예약 (RESERVED)
+            
+            // 2. 포인트 예약 (my-point 호출)
+            log.info("[Try] 포인트 예약 시도 - userId: {}, amount: {}", command.getUserId(), command.getUsePoint());
+            restTemplate.postForEntity(POINT_BASE_URL + "/try", 
+                    Map.of("userId", command.getUserId(), "amount", command.getUsePoint()), 
+                    Void.class);
+            pointTrySuccess = true;
+
+            // 3. 결제 예약 (my-payment 호출)
+            log.info("[Try] 결제 예약 시도 - orderId: {}, amount: {}", order.getId(), order.getPaymentAmount());
+            restTemplate.postForEntity(PAYMENT_BASE_URL + "/try", 
+                    Map.of("orderId", order.getId(), "amount", order.getPaymentAmount()), 
+                    Void.class);
+            paymentTrySuccess = true;
+
+            // [Confirm 단계] - 모든 Try 성공 시
+            log.info("[Confirm] 모든 리소스 확정 시도");
+            
+            // 4. 포인트 확정
+            restTemplate.postForEntity(POINT_BASE_URL + "/confirm", 
                     Map.of("userId", command.getUserId(), "amount", command.getUsePoint()), 
                     Void.class);
 
-            try {
-                // 3. 결제 처리 (my-payment 호출)
-                log.info("결제 처리 시도 - orderId: {}, amount: {}", order.getId(), order.getPaymentAmount());
-                restTemplate.postForEntity(PAYMENT_SERVICE_URL, 
-                        Map.of("orderId", order.getId(), "amount", order.getPaymentAmount()), 
-                        Void.class);
-            } catch (Exception e) {
-                // 결제 실패 시 포인트 복구 (보상 트랜잭션)
-                log.error("결제 처리 실패 - orderId: {}, 사유: {}", order.getId(), e.getMessage());
-                log.info("보상 트랜잭션: 포인트 복구 시도 - userId: {}, amount: {}", command.getUserId(), command.getUsePoint());
-                restTemplate.postForEntity(POINT_RESTORE_URL, 
-                        Map.of("userId", command.getUserId(), "amount", command.getUsePoint()), 
-                        Void.class);
-                throw e;
-            }
+            // 5. 결제 확정
+            restTemplate.postForEntity(PAYMENT_BASE_URL + "/confirm", 
+                    Map.of("orderId", order.getId()), 
+                    Void.class);
 
-            // 4. 주문 완료
+            // 6. 주문 확정
             order.complete();
-            log.info("주문 처리 성공 - orderId: {}", order.getId());
+            log.info("TCC 주문 처리 성공 - orderId: {}", order.getId());
 
         } catch (Exception e) {
-            log.error("주문 프로세스 중 예외 발생, 주문 실패 처리 - orderId: {}", order.getId());
-            order.fail();
-            // noRollbackFor 설정으로 인해 fail() 상태가 DB에 커밋됨
+            log.error("TCC Try 단계 중 실패 발생, Cancel 단계 실행 - orderId: {}, 사유: {}", order.getId(), e.getMessage());
+            
+            // [Cancel 단계] - 하나라도 Try 실패 시
+            try {
+                if (paymentTrySuccess) {
+                    log.info("[Cancel] 결제 예약 취소 시도 - orderId: {}", order.getId());
+                    restTemplate.postForEntity(PAYMENT_BASE_URL + "/cancel", 
+                            Map.of("orderId", order.getId()), 
+                            Void.class);
+                }
+                if (pointTrySuccess) {
+                    log.info("[Cancel] 포인트 예약 취소 시도 - userId: {}, amount: {}", command.getUserId(), command.getUsePoint());
+                    restTemplate.postForEntity(POINT_BASE_URL + "/cancel", 
+                            Map.of("userId", command.getUserId(), "amount", command.getUsePoint()), 
+                            Void.class);
+                }
+            } catch (Exception cancelEx) {
+                log.error("[Cancel] 취소 프로세스 중 추가 예외 발생 - orderId: {}", order.getId(), cancelEx);
+                // 실제 운영 환경에서는 재시도 큐 등에 넣어야 함
+            }
+
+            order.cancel();
             throw e;
         }
 
         return order.getId();
     }
+
 }

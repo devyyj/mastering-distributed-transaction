@@ -25,9 +25,13 @@ public class Point {
     @Column(nullable = false)
     private Long balance;
 
+    @Column(nullable = false)
+    private Long reservedPoint;
+
     private Point(Long userId, Long balance) {
         this.userId = userId;
         this.balance = balance;
+        this.reservedPoint = 0L;
     }
 
     /**
@@ -38,9 +42,9 @@ public class Point {
     }
 
     /**
-     * 포인트 차감
+     * TCC - Try: 포인트 예약
      */
-    public void use(Long amount) {
+    public void tryUse(Long amount) {
         if (amount < 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
@@ -48,15 +52,34 @@ public class Point {
             throw new BusinessException(ErrorCode.INSUFFICIENT_POINT);
         }
         this.balance -= amount;
+        this.reservedPoint += amount;
     }
 
     /**
-     * 포인트 복구 (보상 트랜잭션용)
+     * TCC - Confirm: 포인트 사용 확정
      */
-    public void restore(Long amount) {
-        if (amount < 0) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+    public void confirmUse(Long amount) {
+        if (this.reservedPoint < amount) {
+            throw new BusinessException("예약된 포인트가 부족합니다.", ErrorCode.INVALID_INPUT_VALUE);
         }
+        this.reservedPoint -= amount;
+    }
+
+    /**
+     * TCC - Cancel: 포인트 예약 취소
+     */
+    public void cancelUse(Long amount) {
+        if (this.reservedPoint < amount) {
+            throw new BusinessException("예약된 포인트가 부족합니다.", ErrorCode.INVALID_INPUT_VALUE);
+        }
+        this.reservedPoint -= amount;
         this.balance += amount;
     }
+
+
+    /**
+     * 기존 use 메서드는 제거하거나 하위 호환을 위해 유지할 수 있으나 TCC로 교체하므로 제거/수정 고려
+     * 여기서는 TCC로 완전히 전환한다고 가정하고 기존 use/restore는 제거합니다.
+     */
+
 }

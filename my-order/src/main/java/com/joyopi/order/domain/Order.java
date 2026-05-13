@@ -51,11 +51,29 @@ public class Order {
         return new Order(userId, productPrice, usePoint);
     }
 
+    public void reserve() {
+        if (this.status != OrderStatus.PENDING) {
+            throw new IllegalStateException("PENDING 상태에서만 예약할 수 있습니다.");
+        }
+        this.status = OrderStatus.RESERVED;
+    }
+
     public void complete() {
+        if (this.status != OrderStatus.RESERVED) {
+            throw new IllegalStateException("RESERVED 상태에서만 확정할 수 있습니다.");
+        }
         this.status = OrderStatus.COMPLETED;
+    }
+
+    public void cancel() {
+        if (this.status != OrderStatus.RESERVED) {
+            throw new IllegalStateException("RESERVED 상태에서만 취소할 수 있습니다.");
+        }
+        this.status = OrderStatus.CANCELLED;
     }
 
     public void fail() {
         this.status = OrderStatus.FAILED;
     }
+
 }

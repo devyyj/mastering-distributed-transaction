@@ -18,6 +18,7 @@ public enum ErrorCode {
     // Payment
     PAYMENT_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "M001", "결제 한도를 초과했습니다."),
     PAYMENT_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "M002", "결제 처리에 실패했습니다."),
+    PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "M003", "결제 정보를 찾을 수 없습니다."),
 
     // Order
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "O001", "주문을 찾을 수 없습니다.");

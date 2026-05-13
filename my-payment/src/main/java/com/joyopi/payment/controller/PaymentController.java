@@ -15,9 +15,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentController {
     private final PaymentService paymentService;
 
-    @PostMapping
-    public ApiResponse<Void> pay(@RequestBody PaymentRequest request) {
-        paymentService.pay(request.getOrderId(), request.getAmount());
+    @PostMapping("/try")
+    public ApiResponse<Void> tryPay(@RequestBody PaymentRequest request) {
+        paymentService.tryPay(request.getOrderId(), request.getAmount());
         return ApiResponse.success(null);
     }
+
+    @PostMapping("/confirm")
+    public ApiResponse<Void> confirmPay(@RequestBody PaymentRequest request) {
+        paymentService.confirmPay(request.getOrderId());
+        return ApiResponse.success(null);
+    }
+
+    @PostMapping("/cancel")
+    public ApiResponse<Void> cancelPay(@RequestBody PaymentRequest request) {
+        paymentService.cancelPay(request.getOrderId());
+        return ApiResponse.success(null);
+    }
+
 }

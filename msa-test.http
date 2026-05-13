@@ -81,8 +81,8 @@ Content-Type: application/json
   "usePoint": 5000
 }
 
-### [단위 테스트] 7. 포인트 서비스 직접 호출
-POST {{point_host}}/api/points/use
+### [단위 테스트] 7. 포인트 서비스 직접 호출 (TCC Try)
+POST {{point_host}}/api/points/try
 Content-Type: application/json
 
 {
@@ -90,11 +90,12 @@ Content-Type: application/json
   "amount": 3000
 }
 
-### [단위 테스트] 8. 결제 서비스 직접 호출
-POST {{payment_host}}/api/payments
+### [단위 테스트] 8. 결제 서비스 직접 호출 (TCC Try)
+POST {{payment_host}}/api/payments/try
 Content-Type: application/json
 
 {
   "orderId": 100,
   "amount": 5000
 }
+
