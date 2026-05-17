@@ -25,6 +25,8 @@
 - 모든 코드는 최대한 간결해야 하며, 주석은 상세해야 합니다.
 - 클린 코드 원칙을 준수해야 합니다.
 - 모든 기능은 TDD(Test-Driven Development) 방식으로 개발되어야 합니다.
+- 영속성 계층(JPA Entity, Repository) 개발 시, 단순 단위 테스트(Mock)뿐만 아니라 `@DataJpaTest`를 통한 실제 DB 정합성 검증 테스트를 반드시 포함해야 합니다.
+- Enum 타입을 데이터베이스에 저장할 때는 `@Enumerated(EnumType.STRING)`을 사용하며, `@Column(length = ...)`을 통해 미래의 상태값 추가를 고려한 충분한 길이를 명시적으로 설정해야 합니다.
 
 ## 디렉토리 구성
 

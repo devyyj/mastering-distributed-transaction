@@ -25,7 +25,7 @@ public class Payment {
     private Long amount;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private PaymentStatus status;
 
     private Payment(Long orderId, Long amount, PaymentStatus status) {
