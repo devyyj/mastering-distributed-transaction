@@ -67,4 +67,23 @@ public class PaymentService {
             throw new BusinessException(ErrorCode.PAYMENT_FAILED);
         }
     }
+
+    /**
+     * 결제 취소 처리 (보상 트랜잭션)
+     */
+    @Transactional
+    public void cancelPayment(Long orderId, Long amount) {
+        log.info("보상 트랜잭션: 결제 취소 요청 시작 - orderId: {}, amount: {}", orderId, amount);
+        try {
+            // 외부 결제 취소 API 연동 시뮬레이션
+            simulateExternalPayment();
+            
+            Payment payment = Payment.createCanceled(orderId, amount);
+            paymentRepository.save(payment);
+            log.info("결제 취소 처리 성공 - orderId: {}", orderId);
+        } catch (Exception e) {
+            log.error("결제 취소 중 예외 발생 - orderId: {}", orderId, e);
+            throw new BusinessException(ErrorCode.PAYMENT_FAILED);
+        }
+    }
 }

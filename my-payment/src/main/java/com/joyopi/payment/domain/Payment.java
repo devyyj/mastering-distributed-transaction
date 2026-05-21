@@ -47,4 +47,11 @@ public class Payment {
     public static Payment createFailed(Long orderId, Long amount) {
         return new Payment(orderId, amount, PaymentStatus.FAILED);
     }
+
+    /**
+     * 취소된 결제 생성
+     */
+    public static Payment createCanceled(Long orderId, Long amount) {
+        return new Payment(orderId, amount, PaymentStatus.CANCELED);
+    }
 }
