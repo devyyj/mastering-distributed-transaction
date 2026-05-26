@@ -28,7 +28,6 @@ import static org.mockito.Mockito.verify;
 class OrderWorkflowTest {
 
     private TestWorkflowEnvironment testEnv;
-    private Worker worker;
     private WorkflowClient workflowClient;
 
     @Mock
@@ -41,23 +40,36 @@ class OrderWorkflowTest {
     @BeforeEach
     void setUp() {
         testEnv = TestWorkflowEnvironment.newInstance();
-        worker = testEnv.newWorker("OrderSagaTaskQueue");
-        worker.registerWorkflowImplementationTypes(OrderWorkflowImpl.class);
-        worker.registerActivitiesImplementations(
+
+        // 1. 주문 서비스 전용 워커 등록 (주문 워크플로우 및 주문 액티비티)
+        Worker orderWorker = testEnv.newWorker("OrderSagaTaskQueue");
+        orderWorker.registerWorkflowImplementationTypes(OrderWorkflowImpl.class);
+        orderWorker.registerActivitiesImplementations(
             new OrderActivity() {
                 @Override public OrderResult createPendingOrder(OrderCommand command) { return orderActivity.createPendingOrder(command); }
                 @Override public void completeOrder(Long orderId) { orderActivity.completeOrder(orderId); }
                 @Override public void cancelOrder(Long orderId) { orderActivity.cancelOrder(orderId); }
-            },
+            }
+        );
+
+        // 2. 포인트 서비스 전용 워커 등록 (포인트 액티비티)
+        Worker pointWorker = testEnv.newWorker("PointTaskQueue");
+        pointWorker.registerActivitiesImplementations(
             new PointActivity() {
                 @Override public void usePoint(Long userId, Long amount) { pointActivity.usePoint(userId, amount); }
                 @Override public void restorePoint(Long userId, Long amount) { pointActivity.restorePoint(userId, amount); }
-            },
+            }
+        );
+
+        // 3. 결제 서비스 전용 워커 등록 (결제 액티비티)
+        Worker paymentWorker = testEnv.newWorker("PaymentTaskQueue");
+        paymentWorker.registerActivitiesImplementations(
             new PaymentActivity() {
                 @Override public void processPayment(Long orderId, Long amount) { paymentActivity.processPayment(orderId, amount); }
                 @Override public void cancelPayment(Long orderId, Long amount) { paymentActivity.cancelPayment(orderId, amount); }
             }
         );
+
         workflowClient = testEnv.getWorkflowClient();
     }
 

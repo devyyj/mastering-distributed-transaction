@@ -9,7 +9,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class TemporalConfig {
 
-    public static final String TASK_QUEUE = "OrderSagaTaskQueue";
+    // 포인트 서비스 전용 Temporal Task Queue 이름
+    public static final String TASK_QUEUE = "PointTaskQueue";
 
     @Bean
     public WorkflowServiceStubs workflowServiceStubs() {

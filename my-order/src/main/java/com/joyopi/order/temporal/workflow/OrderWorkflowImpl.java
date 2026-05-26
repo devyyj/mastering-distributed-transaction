@@ -13,7 +13,8 @@ import java.time.Duration;
 
 public class OrderWorkflowImpl implements OrderWorkflow {
 
-    private final ActivityOptions options = ActivityOptions.newBuilder()
+    // 주문 서비스용 액티비티 옵션 (기본 OrderSagaTaskQueue 사용)
+    private final ActivityOptions orderOptions = ActivityOptions.newBuilder()
             .setStartToCloseTimeout(Duration.ofSeconds(10))
             .setRetryOptions(RetryOptions.newBuilder()
                     .setInitialInterval(Duration.ofSeconds(1))
@@ -21,9 +22,29 @@ public class OrderWorkflowImpl implements OrderWorkflow {
                     .build())
             .build();
 
-    private final OrderActivity orderActivity = Workflow.newActivityStub(OrderActivity.class, options);
-    private final PointActivity pointActivity = Workflow.newActivityStub(PointActivity.class, options);
-    private final PaymentActivity paymentActivity = Workflow.newActivityStub(PaymentActivity.class, options);
+    // 포인트 서비스용 액티비티 옵션 (PointTaskQueue 라우팅)
+    private final ActivityOptions pointOptions = ActivityOptions.newBuilder()
+            .setStartToCloseTimeout(Duration.ofSeconds(10))
+            .setTaskQueue("PointTaskQueue")
+            .setRetryOptions(RetryOptions.newBuilder()
+                    .setInitialInterval(Duration.ofSeconds(1))
+                    .setMaximumAttempts(3)
+                    .build())
+            .build();
+
+    // 결제 서비스용 액티비티 옵션 (PaymentTaskQueue 라우팅)
+    private final ActivityOptions paymentOptions = ActivityOptions.newBuilder()
+            .setStartToCloseTimeout(Duration.ofSeconds(10))
+            .setTaskQueue("PaymentTaskQueue")
+            .setRetryOptions(RetryOptions.newBuilder()
+                    .setInitialInterval(Duration.ofSeconds(1))
+                    .setMaximumAttempts(3)
+                    .build())
+            .build();
+
+    private final OrderActivity orderActivity = Workflow.newActivityStub(OrderActivity.class, orderOptions);
+    private final PointActivity pointActivity = Workflow.newActivityStub(PointActivity.class, pointOptions);
+    private final PaymentActivity paymentActivity = Workflow.newActivityStub(PaymentActivity.class, paymentOptions);
 
     @Override
     public Long processOrder(OrderCommand command) {
