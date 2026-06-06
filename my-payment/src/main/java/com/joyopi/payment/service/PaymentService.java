@@ -40,11 +40,9 @@ public class PaymentService {
         } catch (BusinessException e) {
             log.error("결제 처리 중 비즈니스 예외 발생 - orderId: {}, errorCode: {}, message: {}", 
                     orderId, e.getErrorCode().getCode(), e.getMessage());
-            paymentHistoryService.saveFailedPayment(orderId, amount);
             throw e;
         } catch (Exception e) {
             log.error("결제 처리 중 예상치 못한 예외 발생 - orderId: {}", orderId, e);
-            paymentHistoryService.saveFailedPayment(orderId, amount);
             throw e;
         }
     }

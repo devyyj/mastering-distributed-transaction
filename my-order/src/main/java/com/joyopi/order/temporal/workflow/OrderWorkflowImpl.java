@@ -68,6 +68,7 @@ public class OrderWorkflowImpl implements OrderWorkflow {
 
             // 3. 결제 처리
             paymentActivity.processPayment(orderId, paymentAmount);
+            saga.addCompensation(paymentActivity::cancelPayment, orderId, paymentAmount);
 
             // 4. 주문 완료
             orderActivity.completeOrder(orderId);

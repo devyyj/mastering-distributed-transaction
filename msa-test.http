@@ -57,7 +57,7 @@ Content-Type: application/json
 {
   "userId": 1,
   "productPrice": 1500000,
-  "usePoint": 3000
+  "usePoint": 2000
 }
 
 ### [복합 시나리오] 6. 연속 주문 (잔액 소진 테스트)

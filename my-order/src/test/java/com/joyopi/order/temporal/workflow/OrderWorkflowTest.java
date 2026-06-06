@@ -157,4 +157,35 @@ class OrderWorkflowTest {
         verify(pointActivity).restorePoint(1L, 1000L);
         verify(orderActivity).cancelOrder(100L);
     }
+
+    @Test
+    @DisplayName("주문 완료 실패 시 결제 취소, 포인트 복구, 주문 취소 보상 트랜잭션 실행")
+    void processOrder_fail_complete_order() {
+        // given
+        OrderCommand command = new OrderCommand(1L, 10000L, 1000L);
+        OrderActivity.OrderResult orderResult = new OrderActivity.OrderResult(100L, 1L, 9000L, 1000L);
+        given(orderActivity.createPendingOrder(any(OrderCommand.class))).willReturn(orderResult);
+        doThrow(new RuntimeException("Order completion failed")).when(orderActivity).completeOrder(any(Long.class));
+
+        testEnv.start();
+
+        OrderWorkflow workflow = workflowClient.newWorkflowStub(OrderWorkflow.class,
+                WorkflowOptions.newBuilder().setTaskQueue("OrderSagaTaskQueue").build());
+
+        // when
+        Throwable thrown = catchThrowable(() -> workflow.processOrder(command));
+
+        // then
+        assertThat(thrown).isNotNull();
+        verify(orderActivity).createPendingOrder(any(OrderCommand.class));
+        verify(pointActivity).usePoint(1L, 1000L);
+        verify(paymentActivity).processPayment(100L, 9000L);
+        verify(orderActivity, org.mockito.Mockito.times(3)).completeOrder(100L);
+
+        // 보상 트랜잭션 (역순)
+        verify(paymentActivity).cancelPayment(100L, 9000L);
+        verify(pointActivity).restorePoint(1L, 1000L);
+        verify(orderActivity).cancelOrder(100L);
+    }
 }
+
