@@ -40,8 +40,8 @@ public class Point {
     /**
      * 포인트 차감
      */
-    public void use(Long amount) {
-        if (amount < 0) {
+     public void use(Long amount) {
+        if (amount == null || amount < 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
         if (this.balance < amount) {
@@ -54,7 +54,7 @@ public class Point {
      * 포인트 복구 (보상 트랜잭션용)
      */
     public void restore(Long amount) {
-        if (amount < 0) {
+        if (amount == null || amount < 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
         this.balance += amount;

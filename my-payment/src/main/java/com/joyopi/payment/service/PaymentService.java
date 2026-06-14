@@ -48,7 +48,7 @@ public class PaymentService {
     }
 
     private void validateAmount(Long amount) {
-        if (amount < 0) {
+        if (amount == null || amount < 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
 

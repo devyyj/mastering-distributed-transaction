@@ -23,35 +23,78 @@ class OrderEventListenerTest {
     @Mock
     private OrderRepository orderRepository;
 
+    @Mock
+    private tools.jackson.databind.ObjectMapper objectMapper;
+
     @Test
-    @DisplayName("PointDeductedEvent 수신 시 주문을 완료 처리한다")
-    void handle_point_deducted_event() {
-        // given
-        PointDeductedEvent event = new PointDeductedEvent(1L);
+    @DisplayName("PaymentApprovedEvent 수신 후 주문을 완료 처리한다")
+    void handle_payment_approved_event() throws Exception {
+        // given - PaymentApprovedEvent JSON (reason 필드 없음)
+        String message = "{\"orderId\":1,\"paymentId\":1,\"userId\":100}";
         Order order = Order.create(1L, 10000L, 1000L);
+
+        tools.jackson.databind.ObjectMapper realMapper = new tools.jackson.databind.ObjectMapper();
+        given(objectMapper.readTree(message)).willReturn(realMapper.readTree(message));
         given(orderRepository.findById(1L)).willReturn(Optional.of(order));
 
         // when
-        orderEventListener.handlePointDeducted(event);
+        orderEventListener.handlePaymentEvent(message);
 
         // then
         verify(orderRepository).findById(1L);
-        // Order 상태가 COMPLETED로 바뀌었는지 검증하기 위해 complete()가 잘 반영되었는지 확인
-        // (Order의 complete() 메서드가 호출되어 상태가 COMPLETED가 됨)
+        // order.complete()가 호출되어 상태가 COMPLETED가 됨
     }
 
     @Test
-    @DisplayName("PointDeductionFailedEvent 수신 시 주문을 실패 처리한다")
-    void handle_point_deduction_failed_event() {
-        // given
-        PointDeductionFailedEvent event = new PointDeductionFailedEvent(1L, "잔액 부족");
+    @DisplayName("PaymentFailedEvent 수신 후 주문을 실패 처리한다")
+    void handle_payment_failed_event() throws Exception {
+        // given - PaymentFailedEvent JSON (reason 필드 있음)
+        String message = "{\"orderId\":1,\"userId\":100,\"reason\":\"결제 한도 초과\"}";
         Order order = Order.create(1L, 10000L, 1000L);
+
+        tools.jackson.databind.ObjectMapper realMapper = new tools.jackson.databind.ObjectMapper();
+        given(objectMapper.readTree(message)).willReturn(realMapper.readTree(message));
         given(orderRepository.findById(1L)).willReturn(Optional.of(order));
 
         // when
-        orderEventListener.handlePointDeductionFailed(event);
+        orderEventListener.handlePaymentEvent(message);
 
         // then
         verify(orderRepository).findById(1L);
+        // order.fail()이 호출되어 상태가 FAILED가 됨
+    }
+
+    @Test
+    @DisplayName("주문 완료 처리 중 DB 조회 실패 시 RuntimeException을 던진다")
+    void handle_payment_event_throws_exception_on_db_error() throws Exception {
+        // given
+        String message = "{\"orderId\":1,\"paymentId\":1,\"userId\":100}";
+        tools.jackson.databind.ObjectMapper realMapper = new tools.jackson.databind.ObjectMapper();
+        given(objectMapper.readTree(message)).willReturn(realMapper.readTree(message));
+        given(orderRepository.findById(1L)).willThrow(new RuntimeException("DB Connection Timeout"));
+
+        // when & then
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> {
+            orderEventListener.handlePaymentEvent(message);
+        });
+    }
+
+    @Test
+    @DisplayName("PointDeductionFailedEvent 수신 후 주문을 실패 처리한다")
+    void handle_point_deduction_failed_event() throws Exception {
+        // given - PointDeductionFailedEvent JSON (reason 필드 있음, userId 없음)
+        String message = "{\"orderId\":1,\"reason\":\"포인트 부족\"}";
+        Order order = Order.create(1L, 10000L, 1000L);
+
+        tools.jackson.databind.ObjectMapper realMapper = new tools.jackson.databind.ObjectMapper();
+        given(objectMapper.readTree(message)).willReturn(realMapper.readTree(message));
+        given(orderRepository.findById(1L)).willReturn(Optional.of(order));
+
+        // when
+        orderEventListener.handlePointEvent(message);
+
+        // then
+        verify(orderRepository).findById(1L);
+        org.junit.jupiter.api.Assertions.assertEquals(com.joyopi.order.domain.OrderStatus.FAILED, order.getStatus());
     }
 }

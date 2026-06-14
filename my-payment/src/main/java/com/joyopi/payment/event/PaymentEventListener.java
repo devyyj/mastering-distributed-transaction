@@ -11,13 +11,17 @@ import org.springframework.stereotype.Component;
 /**
  * 결제 서비스 이벤트 리스너
  *
+ * [이벤트 흐름]
+ * 정상: point-events(PointDeductedEvent) → 결제 처리 → payment-events(PaymentApprovedEvent)
+ * 보상: 결제 실패 시 → payment-events(PaymentFailedEvent) 발행 (포인트 서비스가 복원 처리)
+ *
  * [Kafka 메시지 처리 전략]
  * Consumer는 String으로 수신하고 ObjectMapper로 역직렬화합니다.
- * 이는 하나의 토픽에 여러 이벤트 타입이 혼재할 때 발생하는 역직렬화 문제를 방지합니다.
+ * 이는 하나의 토픽에 여러 이벤트 타입이 존재할 때 발생하는 역직렬화 문제를 방지합니다.
  *
- * [토픽별 처리]
- * - order-events: OrderCreatedEvent 수신 → 결제 처리 후 PaymentApprovedEvent/PaymentCancelledEvent 발행
- * - point-events: PointDeductionFailedEvent 수신 → 결제 취소 후 PaymentCancelledEvent 발행
+ * [처리 토픽]
+ * - point-events: PointDeductedEvent 수신 → 결제 처리 → PaymentApprovedEvent/PaymentFailedEvent 발행
+ *   (PointDeductionFailedEvent, PointRestoredEvent 등 reason/restoredAmount 필드 있는 메시지 무시)
  */
 @Slf4j
 @Component
@@ -29,64 +33,56 @@ public class PaymentEventListener {
     private final ObjectMapper objectMapper;
 
     /**
-     * order-events 토픽 리스너
-     * OrderCreatedEvent 수신 → 결제 처리
+     * point-events 토픽 리스너 (정상 흐름)
+     * PointDeductedEvent 수신 → 결제 처리 → PaymentApprovedEvent 발행
+     * 결제 실패 시 → PaymentFailedEvent 발행 (포인트 서비스가 복원 처리)
+     * userId 필드가 없는 메시지(PointDeductionFailedEvent 등)는 무시
      */
-    @KafkaListener(topics = "order-events", groupId = "payment-service-group")
-    public void handleOrderCreated(String message) {
+    @KafkaListener(topics = "point-events", groupId = "payment-service-group")
+    public void handlePointDeducted(String message) {
         try {
-            OrderCreatedEvent event = objectMapper.readValue(message, OrderCreatedEvent.class);
-            log.info("PaymentEventListener - 주문 생성 이벤트 수신. orderId: {}, userId: {}, 결제금액: {}",
+            PointDeductedEvent event = objectMapper.readValue(message, PointDeductedEvent.class);
+
+            // userId 또는 paymentAmount가 null이면 PointDeductedEvent가 아닌 다른 이벤트이므로 무시
+            if (event.getUserId() == null || event.getPaymentAmount() == null) {
+                log.debug("PaymentEventListener - 유효하지 않은 PointDeductedEvent 메시지 무시. orderId: {}", event.getOrderId());
+                return;
+            }
+
+            log.info("PaymentEventListener - 포인트 차감 완료 이벤트 수신. orderId: {}, userId: {}, 결제금액: {}",
                     event.getOrderId(), event.getUserId(), event.getPaymentAmount());
 
             paymentService.pay(event.getOrderId(), event.getPaymentAmount());
 
-            // 결제 성공 시 PaymentApprovedEvent 발행
+            // 결제 성공 이벤트 발행 (주문 서비스가 주문 완료 처리)
             PaymentApprovedEvent approvedEvent = new PaymentApprovedEvent(
                     event.getOrderId(),
-                    1L, // paymentId 예시
+                    1L, // paymentId 임시값
                     event.getUserId(),
-                    event.getUsePoint()
+                    null  // usePoint는 결제 서비스 관심사 아님
             );
             kafkaTemplate.send("payment-events", approvedEvent);
             log.info("결제 성공 이벤트 발행 완료. orderId: {}", event.getOrderId());
-        } catch (Exception e) {
-            log.error("주문 이벤트 처리 중 오류 발생. message: {}", message, e);
-            try {
-                OrderCreatedEvent event = objectMapper.readValue(message, OrderCreatedEvent.class);
-                PaymentCancelledEvent cancelledEvent = new PaymentCancelledEvent(event.getOrderId(), e.getMessage());
-                kafkaTemplate.send("payment-events", cancelledEvent);
-            } catch (Exception ex) {
-                log.error("결제 취소 이벤트 발행 실패. message: {}", message, ex);
-            }
-        }
-    }
 
-    /**
-     * point-events 토픽 리스너
-     * PointDeductionFailedEvent 수신 → 결제 취소 보상 트랜잭션
-     * reason 필드가 있는 메시지만 처리 (PointDeductionFailedEvent 식별)
-     */
-    @KafkaListener(topics = "point-events", groupId = "payment-service-group-compensate")
-    public void handlePointDeductionFailed(String message) {
-        try {
-            PointDeductionFailedEvent event = objectMapper.readValue(message, PointDeductionFailedEvent.class);
-
-            // reason 필드가 없으면 PointDeductedEvent(성공) 이므로 무시
-            if (event.getReason() == null) {
-                return;
-            }
-
-            log.info("PaymentEventListener - 포인트 차감 실패 이벤트 수신. orderId: {}, 사유: {}",
-                    event.getOrderId(), event.getReason());
-
-            paymentService.cancelPayment(event.getOrderId(), 0L);
-
-            PaymentCancelledEvent cancelledEvent = new PaymentCancelledEvent(event.getOrderId(), event.getReason());
-            kafkaTemplate.send("payment-events", cancelledEvent);
-            log.info("결제 취소 보상 이벤트 발행 완료. orderId: {}", event.getOrderId());
         } catch (Exception e) {
             log.error("point-events 메시지 처리 중 오류 발생. message: {}", message, e);
+            try {
+                PointDeductedEvent event = objectMapper.readValue(message, PointDeductedEvent.class);
+                if (event.getOrderId() != null) {
+                    // 결제 실패 이벤트 발행 (포인트 복원 보상 트랜잭션 트리거)
+                    PaymentFailedEvent failedEvent = new PaymentFailedEvent(
+                            event.getOrderId(),
+                            event.getUserId(),
+                            event.getUsePoint(),
+                            e.getMessage()
+                    );
+                    kafkaTemplate.send("payment-events", failedEvent);
+                    log.info("결제 실패 이벤트 발행 완료. orderId: {}", event.getOrderId());
+                }
+            } catch (Exception ex) {
+                log.error("결제 실패 이벤트 발행 실패. message: {}", message, ex);
+                throw new RuntimeException("결제 실패 이벤트 발행 실패: " + ex.getMessage(), ex);
+            }
         }
     }
 }

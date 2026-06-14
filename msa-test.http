@@ -55,7 +55,7 @@ POST {{order_host}}/api/v1/orders
 Content-Type: application/json
 
 {
-  "userId": 1,
+  "userId": 9999,
   "productPrice": 1500000,
   "usePoint": 2000
 }
