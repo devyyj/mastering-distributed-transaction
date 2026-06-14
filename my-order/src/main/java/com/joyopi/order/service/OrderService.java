@@ -1,14 +1,14 @@
 package com.joyopi.order.service;
 
+import com.joyopi.order.domain.Order;
+import com.joyopi.order.repository.OrderRepository;
 import com.joyopi.order.service.dto.OrderCommand;
-import com.joyopi.order.temporal.workflow.OrderWorkflow;
-import io.temporal.client.WorkflowClient;
-import io.temporal.client.WorkflowOptions;
+import com.joyopi.order.event.OrderCreatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-
-import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 주문 서비스
@@ -18,18 +18,27 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderService {
 
-    private final WorkflowClient workflowClient;
+    private final OrderRepository orderRepository;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
+    @Transactional
     public Long order(OrderCommand command) {
-        log.info("주문 프로세스(Saga) 시작 - userId: {}, productPrice: {}", command.getUserId(), command.getProductPrice());
+        log.info("주문 프로세스(코레오그래피) 시작 - userId: {}, productPrice: {}", command.getUserId(), command.getProductPrice());
 
-        OrderWorkflow workflow = workflowClient.newWorkflowStub(OrderWorkflow.class,
-                WorkflowOptions.newBuilder()
-                        .setTaskQueue("OrderSagaTaskQueue")
-                        .setWorkflowId("order-saga-" + UUID.randomUUID().toString())
-                        .build());
+        // 1. 주문 엔티티 생성 (초기 상태 PENDING)
+        Order order = Order.create(command.getUserId(), command.getProductPrice(), command.getUsePoint());
+        Order savedOrder = orderRepository.save(order);
 
-        // 워크플로우 동기 실행 (결과 반환 대기)
-        return workflow.processOrder(command);
+        // 2. 주문 생성 이벤트 발행
+        OrderCreatedEvent event = new OrderCreatedEvent(
+                savedOrder.getId(),
+                savedOrder.getUserId(),
+                savedOrder.getPaymentAmount(),
+                savedOrder.getUsePoint()
+        );
+        kafkaTemplate.send("order-events", event);
+        log.info("주문 생성 이벤트 발행 완료 - orderId: {}", savedOrder.getId());
+
+        return savedOrder.getId();
     }
 }
