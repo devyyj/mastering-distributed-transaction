@@ -11,7 +11,7 @@ POST {{order_host}}/api/v1/orders
 Content-Type: application/json
 
 {
-  "userId": 1,
+  "userId": 4,
   "productPrice": 100000,
   "usePoint": 2000
 }
@@ -55,7 +55,7 @@ POST {{order_host}}/api/v1/orders
 Content-Type: application/json
 
 {
-  "userId": 9999,
+  "userId": 7,
   "productPrice": 1500000,
   "usePoint": 2000
 }

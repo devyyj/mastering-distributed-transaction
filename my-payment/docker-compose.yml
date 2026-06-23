@@ -11,6 +11,11 @@ services:
       - "3309:3306"
     volumes:
       - payment-db-data:/var/lib/mysql
+    command:
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --server-id=3
+      - --binlog-row-image=FULL
 
 volumes:
   payment-db-data:

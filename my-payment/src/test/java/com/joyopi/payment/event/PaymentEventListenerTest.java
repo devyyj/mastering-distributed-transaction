@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -24,43 +23,38 @@ class PaymentEventListenerTest {
     @Mock
     private PaymentService paymentService;
 
-    @Mock
-    private KafkaTemplate<String, Object> kafkaTemplate;
-
     @BeforeEach
     void setUp() {
-        // ObjectMapper는 실제 인스턴스 사용 (tools.jackson.databind.ObjectMapper는 Mockito Mock 불가)
-        paymentEventListener = new PaymentEventListener(paymentService, kafkaTemplate, new ObjectMapper());
+        paymentEventListener = new PaymentEventListener(paymentService, new ObjectMapper());
     }
 
     @Test
-    @DisplayName("PointDeductedEvent 수신 후 결제를 진행하고 PaymentApprovedEvent를 발행한다")
+    @DisplayName("PointDeductedEvent 수신 후 결제를 진행하고 PaymentApprovedEvent를 아웃박스에 적재하도록 호출한다")
     void handle_point_deducted_event_success() {
         // given - PointDeductedEvent JSON (userId 있음)
         String message = "{\"orderId\":1,\"userId\":100,\"paymentAmount\":10000,\"usePoint\":1000}";
-        doNothing().when(paymentService).pay(1L, 10000L);
+        doNothing().when(paymentService).pay(1L, 100L, 10000L, 1000L);
 
         // when
         paymentEventListener.handlePointDeducted(message);
 
         // then
-        verify(paymentService).pay(1L, 10000L);
-        verify(kafkaTemplate).send(eq("payment-events"), any(PaymentApprovedEvent.class));
+        verify(paymentService).pay(1L, 100L, 10000L, 1000L);
     }
 
     @Test
-    @DisplayName("PointDeductedEvent 수신 후 결제 실패 시 PaymentFailedEvent를 발행한다")
+    @DisplayName("PointDeductedEvent 수신 후 결제 실패 시 PaymentFailedEvent를 아웃박스에 적재하도록 호출한다")
     void handle_point_deducted_event_payment_fail() {
         // given
         String message = "{\"orderId\":1,\"userId\":100,\"paymentAmount\":10000,\"usePoint\":1000}";
-        doThrow(new RuntimeException("결제 한도 초과")).when(paymentService).pay(1L, 10000L);
+        doThrow(new RuntimeException("결제 한도 초과")).when(paymentService).pay(1L, 100L, 10000L, 1000L);
 
         // when
         paymentEventListener.handlePointDeducted(message);
 
         // then
-        verify(paymentService).pay(1L, 10000L);
-        verify(kafkaTemplate).send(eq("payment-events"), any(PaymentFailedEvent.class));
+        verify(paymentService).pay(1L, 100L, 10000L, 1000L);
+        verify(paymentService).savePaymentFailedOutbox(1L, 100L, 1000L, "결제 한도 초과");
     }
 
     @Test
@@ -73,9 +67,7 @@ class PaymentEventListenerTest {
         paymentEventListener.handlePointDeducted(message);
 
         // then
-        // pay()가 호출되지 않고 kafkaTemplate.send()가 호출되지 않아야 함
         org.mockito.Mockito.verifyNoInteractions(paymentService);
-        org.mockito.Mockito.verifyNoInteractions(kafkaTemplate);
     }
 
     @Test
@@ -89,20 +81,5 @@ class PaymentEventListenerTest {
 
         // then
         org.mockito.Mockito.verifyNoInteractions(paymentService);
-        org.mockito.Mockito.verifyNoInteractions(kafkaTemplate);
-    }
-
-    @Test
-    @DisplayName("PointDeductedEvent 수신 후 결제 실패 시 PaymentFailedEvent 발행조차 실패하면 RuntimeException을 던진다")
-    void handle_point_deducted_event_payment_fail_throws_exception_on_event_send_fail() {
-        // given
-        String message = "{\"orderId\":1,\"userId\":100,\"paymentAmount\":10000,\"usePoint\":1000}";
-        doThrow(new RuntimeException("결제 한도 초과")).when(paymentService).pay(1L, 10000L);
-        doThrow(new RuntimeException("Kafka Broker Down")).when(kafkaTemplate).send(eq("payment-events"), any(PaymentFailedEvent.class));
-
-        // when & then
-        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, () -> {
-            paymentEventListener.handlePointDeducted(message);
-        });
     }
 }

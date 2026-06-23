@@ -11,6 +11,11 @@ services:
       - "3307:3306"
     volumes:
       - order-db-data:/var/lib/mysql
+    command:
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --server-id=1
+      - --binlog-row-image=FULL
 
 volumes:
   order-db-data:

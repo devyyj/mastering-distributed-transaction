@@ -5,19 +5,14 @@ import com.joyopi.point.service.PointService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 /**
  * 포인트 서비스 이벤트 리스너
  *
  * [이벤트 흐름]
- * 정상: order-events(OrderCreatedEvent) → 포인트 차감 → point-events(PointDeductedEvent)
- * 보상: payment-events(PaymentFailedEvent) → 포인트 복원 → point-events(PointRestoredEvent)
- *
- * [Kafka 메시지 처리 전략]
- * Consumer는 String으로 수신하고 ObjectMapper로 역직렬화합니다.
- * 이는 하나의 토픽에 여러 이벤트 타입이 존재할 때 발생하는 역직렬화 문제를 방지합니다.
+ * 정상: order-events(OrderCreatedEvent) → 포인트 차감 → PointDeductedEvent 적재 (Outbox)
+ * 보상: payment-events(PaymentFailedEvent) → 포인트 복원 → PointRestoredEvent 적재 (Outbox)
  */
 @Slf4j
 @Component
@@ -25,13 +20,12 @@ import org.springframework.stereotype.Component;
 public class PointEventListener {
 
     private final PointService pointService;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
     /**
      * order-events 토픽 리스너 (정상 흐름 진입점)
-     * OrderCreatedEvent 수신 → 포인트 차감 → PointDeductedEvent 발행
-     * 포인트 부족 시 → PointDeductionFailedEvent 발행 (현재 흐름에서는 사용하지 않음)
+     * OrderCreatedEvent 수신 → 포인트 차감 → Outbox에 PointDeductedEvent 적재
+     * 포인트 부족 시 → Outbox에 PointDeductionFailedEvent 적재
      */
     @KafkaListener(topics = "order-events", groupId = "point-service-group")
     public void handleOrderCreated(String message) {
@@ -40,39 +34,27 @@ public class PointEventListener {
             log.info("PointEventListener - 주문 생성 이벤트 수신. orderId: {}, userId: {}, 차감포인트: {}",
                     event.getOrderId(), event.getUserId(), event.getUsePoint());
 
-            // 포인트 차감
-            pointService.usePoint(event.getUserId(), event.getUsePoint());
-
-            // 포인트 차감 성공 이벤트 발행 (결제 서비스가 필요한 paymentAmount, usePoint 포함)
-            PointDeductedEvent deductedEvent = new PointDeductedEvent(
-                    event.getOrderId(),
-                    event.getUserId(),
-                    event.getPaymentAmount(),
-                    event.getUsePoint()
-            );
-            kafkaTemplate.send("point-events", deductedEvent);
-            log.info("포인트 차감 성공 이벤트 발행 완료. orderId: {}", event.getOrderId());
+            // 포인트 차감 및 Outbox 적재 (단일 로컬 트랜잭션)
+            pointService.usePoint(event.getOrderId(), event.getUserId(), event.getUsePoint(), event.getPaymentAmount());
+            log.info("포인트 차감 및 아웃박스 적재 성공. orderId: {}", event.getOrderId());
 
         } catch (Exception e) {
             log.error("order-events 메시지 처리 중 오류 발생. message: {}", message, e);
             try {
                 OrderCreatedEvent event = objectMapper.readValue(message, OrderCreatedEvent.class);
                 if (event.getOrderId() != null) {
-                    PointDeductionFailedEvent failedEvent = new PointDeductionFailedEvent(
-                            event.getOrderId(), e.getMessage()
-                    );
-                    kafkaTemplate.send("point-events", failedEvent);
-                    log.info("포인트 차감 실패 이벤트 발행 완료. orderId: {}", event.getOrderId());
+                    // 독립된 트랜잭션으로 포인트 차감 실패 이벤트를 아웃박스에 적재
+                    pointService.savePointDeductionFailedOutbox(event.getOrderId(), e.getMessage());
                 }
             } catch (Exception ex) {
-                log.error("포인트 차감 실패 이벤트 발행 실패. message: {}", message, ex);
+                log.error("포인트 차감 실패 아웃박스 적재 실패. message: {}", message, ex);
             }
         }
     }
 
     /**
      * payment-events 토픽 리스너 (보상 트랜잭션)
-     * PaymentFailedEvent 수신 → 포인트 복원 → PointRestoredEvent 발행
+     * PaymentFailedEvent 수신 → 포인트 복원 → Outbox에 PointRestoredEvent 적재
      * userId, usePoint 필드가 없는 메시지(PaymentApprovedEvent)는 무시
      */
     @KafkaListener(topics = "payment-events", groupId = "point-service-compensate-group")
@@ -96,17 +78,9 @@ public class PointEventListener {
                 throw new RuntimeException("실습을 위한 강제 보상 트랜잭션 실패");
             }
 
-            // 포인트 복원 (보상 트랜잭션)
-            pointService.restorePoint(event.getUserId(), event.getUsePoint());
-
-            // 포인트 복원 완료 이벤트 발행
-            PointRestoredEvent restoredEvent = new PointRestoredEvent(
-                    event.getOrderId(),
-                    event.getUserId(),
-                    event.getUsePoint()
-            );
-            kafkaTemplate.send("point-events", restoredEvent);
-            log.info("포인트 복원 완료 이벤트 발행 완료. orderId: {}", event.getOrderId());
+            // 포인트 복원 및 Outbox 적재 (단일 로컬 트랜잭션)
+            pointService.restorePoint(event.getOrderId(), event.getUserId(), event.getUsePoint());
+            log.info("포인트 복원 및 아웃박스 적재 성공. orderId: {}", event.getOrderId());
 
         } catch (Exception e) {
             log.error("payment-events 메시지 처리 중 오류 발생. message: {}", message, e);

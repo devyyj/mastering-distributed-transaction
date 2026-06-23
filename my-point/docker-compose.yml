@@ -11,6 +11,11 @@ services:
       - "3308:3306"
     volumes:
       - point-db-data:/var/lib/mysql
+    command:
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --server-id=2
+      - --binlog-row-image=FULL
 
 volumes:
   point-db-data:
