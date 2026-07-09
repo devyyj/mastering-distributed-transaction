@@ -15,4 +15,5 @@ public class PointRestoredEvent {
     private Long orderId;
     private Long userId;
     private Long restoredAmount;
+    private String idempotencyKey;
 }

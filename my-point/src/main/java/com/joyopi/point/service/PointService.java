@@ -4,8 +4,11 @@ import tools.jackson.databind.ObjectMapper;
 import com.joyopi.point.common.exception.BusinessException;
 import com.joyopi.point.common.exception.ErrorCode;
 import com.joyopi.point.domain.Point;
+import com.joyopi.point.domain.PointHistory;
+import com.joyopi.point.domain.PointHistory.PointHistoryType;
 import com.joyopi.point.domain.OutboxEvent;
 import com.joyopi.point.repository.PointRepository;
+import com.joyopi.point.repository.PointHistoryRepository;
 import com.joyopi.point.repository.OutboxRepository;
 import com.joyopi.point.event.PointDeductedEvent;
 import com.joyopi.point.event.PointRestoredEvent;
@@ -25,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PointService {
     private final PointRepository pointRepository;
+    private final PointHistoryRepository pointHistoryRepository;
     private final OutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
@@ -32,8 +36,30 @@ public class PointService {
      * 포인트 사용 요청 처리
      */
     @Transactional
-    public void usePoint(Long orderId, Long userId, Long amount, Long paymentAmount) {
-        log.info("포인트 사용 요청 시작 - orderId: {}, userId: {}, amount: {}", orderId, userId, amount);
+    public void usePoint(Long orderId, Long userId, Long amount, Long paymentAmount, String idempotencyKey) {
+        log.info("포인트 사용 요청 시작 - orderId: {}, userId: {}, amount: {}, idempotencyKey: {}", orderId, userId, amount, idempotencyKey);
+        
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+
+        // 멱등성 검증
+        java.util.Optional<PointHistory> existingHistory = pointHistoryRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingHistory.isPresent()) {
+            log.info("포인트 사용 중복 요청 무시 (Idempotent Skip) - orderId: {}, idempotencyKey: {}", orderId, idempotencyKey);
+            return;
+        }
+
+        try {
+            // 멱등 이력 먼저 저장
+            PointHistory history = PointHistory.create(userId, orderId, amount, PointHistoryType.DEDUCT, idempotencyKey);
+            pointHistoryRepository.save(history);
+            pointHistoryRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.info("동시 요청으로 인한 포인트 사용 중복 처리 방지 (UNIQUE 제약 조건 위반) - orderId: {}, idempotencyKey: {}", orderId, idempotencyKey);
+            return;
+        }
+
         try {
             Point point = pointRepository.findById(userId)
                     .orElseGet(() -> {
@@ -46,7 +72,7 @@ public class PointService {
             log.info("포인트 사용 처리 완료 - userId: {}, balance: {}", userId, point.getBalance());
 
             // 2. 포인트 차감 성공 이벤트를 Outbox 테이블에 저장 (로컬 트랜잭션 통합)
-            PointDeductedEvent deductedEvent = new PointDeductedEvent(orderId, userId, paymentAmount, amount);
+            PointDeductedEvent deductedEvent = new PointDeductedEvent(orderId, userId, paymentAmount, amount, idempotencyKey);
             String payload = objectMapper.writeValueAsString(deductedEvent);
             OutboxEvent outboxEvent = OutboxEvent.create(
                     "point",
@@ -71,8 +97,32 @@ public class PointService {
      * 포인트 복구 요청 처리 (보상 트랜잭션)
      */
     @Transactional
-    public void restorePoint(Long orderId, Long userId, Long amount) {
-        log.info("보상 트랜잭션: 포인트 복구 요청 시작 - orderId: {}, userId: {}, amount: {}", orderId, userId, amount);
+    public void restorePoint(Long orderId, Long userId, Long amount, String idempotencyKey) {
+        log.info("보상 트랜잭션: 포인트 복구 요청 시작 - orderId: {}, userId: {}, amount: {}, idempotencyKey: {}", orderId, userId, amount, idempotencyKey);
+        
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+
+        String restoreIdempotencyKey = idempotencyKey + "-restore";
+
+        // 멱등성 검증
+        java.util.Optional<PointHistory> existingHistory = pointHistoryRepository.findByIdempotencyKey(restoreIdempotencyKey);
+        if (existingHistory.isPresent()) {
+            log.info("포인트 복원 중복 요청 무시 (Idempotent Skip) - orderId: {}, restoreIdempotencyKey: {}", orderId, restoreIdempotencyKey);
+            return;
+        }
+
+        try {
+            // 복원 이력 저장
+            PointHistory history = PointHistory.create(userId, orderId, amount, PointHistoryType.RESTORE, restoreIdempotencyKey);
+            pointHistoryRepository.save(history);
+            pointHistoryRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.info("동시 요청으로 인한 포인트 복원 중복 처리 방지 (UNIQUE 제약 조건 위반) - orderId: {}, restoreIdempotencyKey: {}", orderId, restoreIdempotencyKey);
+            return;
+        }
+
         try {
             Point point = pointRepository.findById(userId)
                     .orElseThrow(() -> {
@@ -85,7 +135,7 @@ public class PointService {
             log.info("포인트 복구 처리 완료 - userId: {}, balance: {}", userId, point.getBalance());
 
             // 2. 포인트 복원 성공 이벤트를 Outbox 테이블에 저장 (로컬 트랜잭션 통합)
-            PointRestoredEvent restoredEvent = new PointRestoredEvent(orderId, userId, amount);
+            PointRestoredEvent restoredEvent = new PointRestoredEvent(orderId, userId, amount, idempotencyKey);
             String payload = objectMapper.writeValueAsString(restoredEvent);
             OutboxEvent outboxEvent = OutboxEvent.create(
                     "point",

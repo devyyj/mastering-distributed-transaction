@@ -6,9 +6,9 @@ $headers = @{
 
 # 등록할 커넥터 목록 정의 (설정 파일명과 커넥터명 매핑)
 $connectors = @(
-    @{ Name = "order-outbox-connector-v3"; File = "debezium-connector-setup.json" },
-    @{ Name = "point-outbox-connector-v3"; File = "debezium-point-connector-setup.json" },
-    @{ Name = "payment-outbox-connector-v3"; File = "debezium-payment-connector-setup.json" }
+    @{ Name = "order-outbox-connector-v6"; File = "debezium-connector-setup.json" },
+    @{ Name = "point-outbox-connector-v6"; File = "debezium-point-connector-setup.json" },
+    @{ Name = "payment-outbox-connector-v6"; File = "debezium-payment-connector-setup.json" }
 )
 
 foreach ($conn in $connectors) {

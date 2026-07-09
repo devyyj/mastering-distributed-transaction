@@ -31,7 +31,7 @@ class OrderEventListenerTest {
     void handle_payment_approved_event() throws Exception {
         // given - PaymentApprovedEvent JSON (reason 필드 없음)
         String message = "{\"orderId\":1,\"paymentId\":1,\"userId\":100}";
-        Order order = Order.create(1L, 10000L, 1000L);
+        Order order = Order.create(1L, 10000L, 1000L, "idemp-key-1");
 
         tools.jackson.databind.ObjectMapper realMapper = new tools.jackson.databind.ObjectMapper();
         given(objectMapper.readTree(message)).willReturn(realMapper.readTree(message));
@@ -50,7 +50,7 @@ class OrderEventListenerTest {
     void handle_payment_failed_event() throws Exception {
         // given - PaymentFailedEvent JSON (reason 필드 있음)
         String message = "{\"orderId\":1,\"userId\":100,\"reason\":\"결제 한도 초과\"}";
-        Order order = Order.create(1L, 10000L, 1000L);
+        Order order = Order.create(1L, 10000L, 1000L, "idemp-key-2");
 
         tools.jackson.databind.ObjectMapper realMapper = new tools.jackson.databind.ObjectMapper();
         given(objectMapper.readTree(message)).willReturn(realMapper.readTree(message));
@@ -84,7 +84,7 @@ class OrderEventListenerTest {
     void handle_point_deduction_failed_event() throws Exception {
         // given - PointDeductionFailedEvent JSON (reason 필드 있음, userId 없음)
         String message = "{\"orderId\":1,\"reason\":\"포인트 부족\"}";
-        Order order = Order.create(1L, 10000L, 1000L);
+        Order order = Order.create(1L, 10000L, 1000L, "idemp-key-3");
 
         tools.jackson.databind.ObjectMapper realMapper = new tools.jackson.databind.ObjectMapper();
         given(objectMapper.readTree(message)).willReturn(realMapper.readTree(message));

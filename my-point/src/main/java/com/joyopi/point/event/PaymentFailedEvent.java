@@ -17,4 +17,5 @@ public class PaymentFailedEvent {
     private Long userId;
     private Long usePoint;
     private String reason;
+    private String idempotencyKey;
 }

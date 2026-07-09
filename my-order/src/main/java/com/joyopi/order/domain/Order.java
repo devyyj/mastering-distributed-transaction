@@ -36,19 +36,26 @@ public class Order {
     @Column(nullable = false)
     private OrderStatus status;
 
-    private Order(Long userId, Long productPrice, Long usePoint) {
+    @Column(nullable = false, unique = true)
+    private String idempotencyKey;
+
+    private Order(Long userId, Long productPrice, Long usePoint, String idempotencyKey) {
         if (productPrice < 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
         this.userId = userId;
         this.productPrice = productPrice;
         this.usePoint = usePoint;
         this.paymentAmount = productPrice - usePoint;
+        this.idempotencyKey = idempotencyKey;
         this.status = OrderStatus.PENDING;
     }
 
-    public static Order create(Long userId, Long productPrice, Long usePoint) {
-        return new Order(userId, productPrice, usePoint);
+    public static Order create(Long userId, Long productPrice, Long usePoint, String idempotencyKey) {
+        return new Order(userId, productPrice, usePoint, idempotencyKey);
     }
 
     public void complete() {

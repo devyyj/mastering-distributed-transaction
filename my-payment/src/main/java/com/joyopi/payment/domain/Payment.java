@@ -28,30 +28,34 @@ public class Payment {
     @Column(nullable = false)
     private PaymentStatus status;
 
-    private Payment(Long orderId, Long amount, PaymentStatus status) {
+    @Column(nullable = false, unique = true)
+    private String idempotencyKey;
+
+    private Payment(Long orderId, Long amount, PaymentStatus status, String idempotencyKey) {
         this.orderId = orderId;
         this.amount = amount;
         this.status = status;
+        this.idempotencyKey = idempotencyKey;
     }
 
     /**
      * 성공한 결제 생성
      */
-    public static Payment createSuccess(Long orderId, Long amount) {
-        return new Payment(orderId, amount, PaymentStatus.COMPLETED);
+    public static Payment createSuccess(Long orderId, Long amount, String idempotencyKey) {
+        return new Payment(orderId, amount, PaymentStatus.COMPLETED, idempotencyKey);
     }
 
     /**
      * 실패한 결제 생성
      */
-    public static Payment createFailed(Long orderId, Long amount) {
-        return new Payment(orderId, amount, PaymentStatus.FAILED);
+    public static Payment createFailed(Long orderId, Long amount, String idempotencyKey) {
+        return new Payment(orderId, amount, PaymentStatus.FAILED, idempotencyKey);
     }
 
     /**
      * 취소된 결제 생성
      */
-    public static Payment createCanceled(Long orderId, Long amount) {
-        return new Payment(orderId, amount, PaymentStatus.CANCELED);
+    public static Payment createCanceled(Long orderId, Long amount, String idempotencyKey) {
+        return new Payment(orderId, amount, PaymentStatus.CANCELED, idempotencyKey);
     }
 }

@@ -42,7 +42,7 @@ public class PaymentEventListener {
                     event.getOrderId(), event.getUserId(), event.getPaymentAmount());
 
             // 결제 처리 및 아웃박스 적재 (로컬 트랜잭션 통합)
-            paymentService.pay(event.getOrderId(), event.getUserId(), event.getPaymentAmount(), event.getUsePoint());
+            paymentService.pay(event.getOrderId(), event.getUserId(), event.getPaymentAmount(), event.getUsePoint(), event.getIdempotencyKey());
             log.info("결제 성공 및 아웃박스 적재 완료. orderId: {}", event.getOrderId());
 
         } catch (Exception e) {
@@ -55,7 +55,8 @@ public class PaymentEventListener {
                             event.getOrderId(),
                             event.getUserId(),
                             event.getUsePoint(),
-                            e.getMessage()
+                            e.getMessage(),
+                            event.getIdempotencyKey()
                     );
                 }
             } catch (Exception ex) {

@@ -46,11 +46,14 @@ class PaymentServiceTest {
         Long userId = 100L;
         Long amount = 50000L;
         Long usePoint = 1000L;
+        String idempotencyKey = "idemp-key-pay-1";
+
+        given(paymentRepository.findByIdempotencyKey(idempotencyKey)).willReturn(java.util.Optional.empty());
         given(paymentRepository.save(any(Payment.class))).willAnswer(invocation -> invocation.getArgument(0));
         given(outboxRepository.save(any(OutboxEvent.class))).willReturn(null);
 
         // when
-        paymentService.pay(orderId, userId, amount, usePoint);
+        paymentService.pay(orderId, userId, amount, usePoint, idempotencyKey);
 
         // then
         verify(paymentRepository).save(any(Payment.class));
@@ -65,9 +68,12 @@ class PaymentServiceTest {
         Long userId = 100L;
         Long amount = 1000001L;
         Long usePoint = 1000L;
+        String idempotencyKey = "idemp-key-pay-2";
+
+        given(paymentRepository.findByIdempotencyKey(idempotencyKey)).willReturn(java.util.Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> paymentService.pay(orderId, userId, amount, usePoint))
+        assertThatThrownBy(() -> paymentService.pay(orderId, userId, amount, usePoint, idempotencyKey))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage(ErrorCode.PAYMENT_LIMIT_EXCEEDED.getMessage());
     }
@@ -80,10 +86,73 @@ class PaymentServiceTest {
         Long userId = 100L;
         Long amount = -100L;
         Long usePoint = 1000L;
+        String idempotencyKey = "idemp-key-pay-3";
+
+        given(paymentRepository.findByIdempotencyKey(idempotencyKey)).willReturn(java.util.Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> paymentService.pay(orderId, userId, amount, usePoint))
+        assertThatThrownBy(() -> paymentService.pay(orderId, userId, amount, usePoint, idempotencyKey))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage(ErrorCode.INVALID_INPUT_VALUE.getMessage());
+    }
+
+    @Test
+    @DisplayName("동일한 멱등키로 결제 승인이 중복 요청되면 비즈니스 로직을 실행하지 않고 리턴한다 (Idempotent Skip)")
+    void pay_duplicate_shouldSkip() {
+        // given
+        Long orderId = 1L;
+        Long userId = 100L;
+        Long amount = 50000L;
+        Long usePoint = 1000L;
+        String idempotencyKey = "idemp-key-pay-dup";
+        Payment existingPayment = Payment.createSuccess(orderId, amount, idempotencyKey);
+
+        given(paymentRepository.findByIdempotencyKey(idempotencyKey)).willReturn(java.util.Optional.of(existingPayment));
+
+        // when
+        paymentService.pay(orderId, userId, amount, usePoint, idempotencyKey);
+
+        // then
+        // save나 outboxRepository가 호출되지 않아야 함
+        org.mockito.Mockito.verify(paymentRepository, org.mockito.Mockito.never()).save(any(Payment.class));
+        org.mockito.Mockito.verifyNoInteractions(outboxRepository);
+    }
+
+    @Test
+    @DisplayName("결제 취소가 정상적으로 처리된다")
+    void cancelPayment_success() {
+        // given
+        Long orderId = 1L;
+        Long amount = 50000L;
+        String idempotencyKey = "idemp-key-cancel-1";
+        String cancelIdempotencyKey = idempotencyKey + "-cancel";
+
+        given(paymentRepository.findByIdempotencyKey(cancelIdempotencyKey)).willReturn(java.util.Optional.empty());
+        given(paymentRepository.save(any(Payment.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        paymentService.cancelPayment(orderId, amount, idempotencyKey);
+
+        // then
+        verify(paymentRepository).save(any(Payment.class));
+    }
+
+    @Test
+    @DisplayName("동일한 멱등키로 결제 취소가 중복 요청되면 추가 취소 처리를 하지 않고 리턴한다 (Idempotent Skip)")
+    void cancelPayment_duplicate_shouldSkip() {
+        // given
+        Long orderId = 1L;
+        Long amount = 50000L;
+        String idempotencyKey = "idemp-key-cancel-dup";
+        String cancelIdempotencyKey = idempotencyKey + "-cancel";
+        Payment existingCancel = Payment.createCanceled(orderId, amount, cancelIdempotencyKey);
+
+        given(paymentRepository.findByIdempotencyKey(cancelIdempotencyKey)).willReturn(java.util.Optional.of(existingCancel));
+
+        // when
+        paymentService.cancelPayment(orderId, amount, idempotencyKey);
+
+        // then
+        org.mockito.Mockito.verify(paymentRepository, org.mockito.Mockito.never()).save(any(Payment.class));
     }
 }

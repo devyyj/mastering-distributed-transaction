@@ -1,6 +1,8 @@
 package com.joyopi.order.service;
 
 import tools.jackson.databind.ObjectMapper;
+import com.joyopi.order.common.exception.BusinessException;
+import com.joyopi.order.common.exception.ErrorCode;
 import com.joyopi.order.domain.Order;
 import com.joyopi.order.domain.OutboxEvent;
 import com.joyopi.order.repository.OrderRepository;
@@ -28,16 +30,43 @@ public class OrderService {
     public Long order(OrderCommand command) {
         log.info("주문 프로세스(아웃박스 패턴) 시작 - userId: {}, productPrice: {}", command.getUserId(), command.getProductPrice());
 
+        // 0. 멱등성 검증
+        if (command.getIdempotencyKey() == null || command.getIdempotencyKey().isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+
+        java.util.Optional<Order> existingOrder = orderRepository.findByIdempotencyKey(command.getIdempotencyKey());
+        if (existingOrder.isPresent()) {
+            log.info("중복된 멱등키 주문 요청 감지 - 기존 주문 반환. orderId: {}, idempotencyKey: {}", 
+                    existingOrder.get().getId(), command.getIdempotencyKey());
+            return existingOrder.get().getId();
+        }
+
         // 1. 주문 엔티티 생성 (초기 상태 PENDING)
-        Order order = Order.create(command.getUserId(), command.getProductPrice(), command.getUsePoint());
-        Order savedOrder = orderRepository.save(order);
+        Order order = Order.create(
+                command.getUserId(), 
+                command.getProductPrice(), 
+                command.getUsePoint(), 
+                command.getIdempotencyKey()
+        );
+        Order savedOrder;
+        try {
+            savedOrder = orderRepository.save(order);
+            orderRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.warn("동시 요청으로 인한 UNIQUE 제약 조건 위반 발생 - 재조회 후 기존 주문 반환. idempotencyKey: {}", command.getIdempotencyKey());
+            return orderRepository.findByIdempotencyKey(command.getIdempotencyKey())
+                    .map(Order::getId)
+                    .orElseThrow(() -> new RuntimeException("주문 저장 오류 및 재조회 실패", e));
+        }
 
         // 2. 주문 생성 이벤트 객체 정의
         OrderCreatedEvent event = new OrderCreatedEvent(
                 savedOrder.getId(),
                 savedOrder.getUserId(),
                 savedOrder.getPaymentAmount(),
-                savedOrder.getUsePoint()
+                savedOrder.getUsePoint(),
+                savedOrder.getIdempotencyKey()
         );
 
         // 3. 이벤트를 JSON으로 변환하여 Outbox 테이블에 저장 (로컬 트랜잭션 통합)

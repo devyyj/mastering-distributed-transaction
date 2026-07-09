@@ -16,4 +16,5 @@ public class OrderCreatedEvent {
     private Long userId;
     private Long paymentAmount;
     private Long usePoint;
+    private String idempotencyKey;
 }

@@ -54,6 +54,11 @@ public class OrderEventListener {
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다. id: " + orderId));
 
+            if (order.getStatus() == com.joyopi.order.domain.OrderStatus.COMPLETED || order.getStatus() == com.joyopi.order.domain.OrderStatus.FAILED) {
+                log.info("OrderEventListener - 이미 최종 처리된 주문입니다. orderId: {}, status: {}", orderId, order.getStatus());
+                return;
+            }
+
             // reason 필드 존재 → 결제 실패 이벤트(PaymentFailedEvent)
             if (node.has("reason") && !node.get("reason").isNull()) {
                 String reason = node.get("reason").asText();
@@ -94,6 +99,12 @@ public class OrderEventListener {
 
                 Order order = orderRepository.findById(orderId)
                         .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다. id: " + orderId));
+                
+                if (order.getStatus() == com.joyopi.order.domain.OrderStatus.COMPLETED || order.getStatus() == com.joyopi.order.domain.OrderStatus.FAILED) {
+                    log.info("OrderEventListener - 이미 최종 처리된 주문입니다(포인트 이벤트 무시). orderId: {}, status: {}", orderId, order.getStatus());
+                    return;
+                }
+
                 order.fail();
                 log.info("주문 실패(FAILED) 처리 완료. orderId: {}", orderId);
             }

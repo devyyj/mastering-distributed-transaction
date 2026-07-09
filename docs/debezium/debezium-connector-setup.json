@@ -1,19 +1,19 @@
 {
-  "name": "point-outbox-connector-v3",
+  "name": "order-outbox-connector-v6",
   "config": {
     "connector.class": "io.debezium.connector.mysql.MySqlConnector",
     "tasks.max": "1",
     "database.hostname": "host.docker.internal",
-    "database.port": "3308",
+    "database.port": "3307",
     "database.user": "root",
     "database.password": "root",
-    "database.server.id": "184055",
-    "database.include.list": "point_db",
-    "table.include.list": "point_db.outbox",
-    "topic.prefix": "point-cdc",
+    "database.server.id": "184054",
+    "database.include.list": "order_db",
+    "table.include.list": "order_db.outbox",
+    "topic.prefix": "order-cdc",
     
     "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
-    "schema.history.internal.kafka.topic": "schema-changes.point-outbox-v3",
+    "schema.history.internal.kafka.topic": "schema-changes.order-outbox-v6",
     
     "transforms": "outbox",
     "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",

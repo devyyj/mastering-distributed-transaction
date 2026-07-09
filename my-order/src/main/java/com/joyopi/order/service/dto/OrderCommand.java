@@ -16,4 +16,5 @@ public class OrderCommand {
     private Long userId;
     private Long productPrice;
     private Long usePoint;
+    private String idempotencyKey;
 }

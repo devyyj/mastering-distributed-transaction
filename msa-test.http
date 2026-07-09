@@ -9,9 +9,10 @@
 # 초기 포인트 10,000 -> 2,000 사용 -> 8,000 남음 -> 8,000 결제
 POST {{order_host}}/api/v1/orders
 Content-Type: application/json
+X-Idempotency-Key: normal-scenario-key-1
 
 {
-  "userId": 4,
+  "userId": 99,
   "productPrice": 100000,
   "usePoint": 2000
 }
@@ -20,6 +21,7 @@ Content-Type: application/json
 # 초기 포인트 10,000 -> 10,000 사용 -> 0 남음 -> 0 결제 (가정)
 POST {{order_host}}/api/v1/orders
 Content-Type: application/json
+X-Idempotency-Key: normal-scenario-key-2
 
 {
   "userId": 2,
@@ -31,6 +33,7 @@ Content-Type: application/json
 # 초기 포인트 10,000 < 요청 포인트 15,000 -> P002 에러 발생 예상
 POST {{order_host}}/api/v1/orders
 Content-Type: application/json
+X-Idempotency-Key: exception-scenario-key-3
 
 {
   "userId": 3,
@@ -42,6 +45,7 @@ Content-Type: application/json
 # C001 에러 발생 예상
 POST {{order_host}}/api/v1/orders
 Content-Type: application/json
+X-Idempotency-Key: exception-scenario-key-4
 
 {
   "userId": 4,
@@ -53,6 +57,7 @@ Content-Type: application/json
 # 결제 금액(productPrice - usePoint) > 1,000,000 -> M001 에러 발생 예상
 POST {{order_host}}/api/v1/orders
 Content-Type: application/json
+X-Idempotency-Key: exception-scenario-key-5
 
 {
   "userId": 7,
@@ -64,6 +69,7 @@ Content-Type: application/json
 # 6-1. 1차 주문: 6,000 포인트 사용 (성공)
 POST {{order_host}}/api/v1/orders
 Content-Type: application/json
+X-Idempotency-Key: double-scenario-key-6a
 
 {
   "userId": 6,
@@ -74,6 +80,7 @@ Content-Type: application/json
 ### 6-2. 2차 주문: 5,000 포인트 사용 (실패 - 잔액 4,000만 남음)
 POST {{order_host}}/api/v1/orders
 Content-Type: application/json
+X-Idempotency-Key: double-scenario-key-6b
 
 {
   "userId": 6,
@@ -82,3 +89,26 @@ Content-Type: application/json
 }
 
 
+### [멱등성 검증 시나리오] 7. 클라이언트 중복 주문 요청 (재시도 대응)
+# 7-1. 1차 주문 생성 요청 (정상 성공 및 주문 ID 반환)
+POST {{order_host}}/api/v1/orders
+Content-Type: application/json
+X-Idempotency-Key: client-idemp-key-unique-7
+
+{
+  "userId": 5,
+  "productPrice": 50000,
+  "usePoint": 1000
+}
+
+### 7-2. 2차 중복 주문 요청 (동일 멱등키 사용)
+# 주문이 추가 적재되거나 이중 결제되지 않고, 1차 요청에서 생성된 기존 주문 ID를 그대로 반환하는지 확인합니다.
+POST {{order_host}}/api/v1/orders
+Content-Type: application/json
+X-Idempotency-Key: client-idemp-key-unique-7
+
+{
+  "userId": 5,
+  "productPrice": 50000,
+  "usePoint": 1000
+}

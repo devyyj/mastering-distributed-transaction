@@ -22,6 +22,13 @@ public class PointEventListener {
     private final PointService pointService;
     private final ObjectMapper objectMapper;
 
+    private static boolean hasThrownException = false;
+
+    // 테스트 및 시나리오 제어용 메서드
+    public static void setHasThrownException(boolean value) {
+        hasThrownException = value;
+    }
+
     /**
      * order-events 토픽 리스너 (정상 흐름 진입점)
      * OrderCreatedEvent 수신 → 포인트 차감 → Outbox에 PointDeductedEvent 적재
@@ -35,10 +42,21 @@ public class PointEventListener {
                     event.getOrderId(), event.getUserId(), event.getUsePoint());
 
             // 포인트 차감 및 Outbox 적재 (단일 로컬 트랜잭션)
-            pointService.usePoint(event.getOrderId(), event.getUserId(), event.getUsePoint(), event.getPaymentAmount());
+            pointService.usePoint(event.getOrderId(), event.getUserId(), event.getUsePoint(), event.getPaymentAmount(), event.getIdempotencyKey());
             log.info("포인트 차감 및 아웃박스 적재 성공. orderId: {}", event.getOrderId());
 
+            // [재현 테스트] 오프셋 커밋 직전, 의도적으로 1회에 한해 RuntimeException 발생 (try-catch 외부로 던져야 함)
+            if (!hasThrownException) {
+                hasThrownException = true;
+                log.warn("=== [재현 테스트] 의도적인 1회성 예외 발생 (오프셋 커밋 누락 유도) ===");
+                throw new RuntimeException("Intentional offset commit failure for idempotency test");
+            }
+
         } catch (Exception e) {
+            // 의도적인 1회성 예외인 경우 그대로 전파하여 오프셋 커밋 방지 및 재시도 유도
+            if (e.getMessage() != null && e.getMessage().contains("Intentional offset commit failure")) {
+                throw e;
+            }
             log.error("order-events 메시지 처리 중 오류 발생. message: {}", message, e);
             try {
                 OrderCreatedEvent event = objectMapper.readValue(message, OrderCreatedEvent.class);
@@ -79,7 +97,7 @@ public class PointEventListener {
             }
 
             // 포인트 복원 및 Outbox 적재 (단일 로컬 트랜잭션)
-            pointService.restorePoint(event.getOrderId(), event.getUserId(), event.getUsePoint());
+            pointService.restorePoint(event.getOrderId(), event.getUserId(), event.getUsePoint(), event.getIdempotencyKey());
             log.info("포인트 복원 및 아웃박스 적재 성공. orderId: {}", event.getOrderId());
 
         } catch (Exception e) {

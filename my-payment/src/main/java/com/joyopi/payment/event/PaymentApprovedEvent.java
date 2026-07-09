@@ -12,4 +12,5 @@ public class PaymentApprovedEvent {
     private Long paymentId;
     private Long userId;
     private Long usePoint;
+    private String idempotencyKey;
 }

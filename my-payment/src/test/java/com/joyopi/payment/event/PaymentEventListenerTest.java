@@ -32,29 +32,29 @@ class PaymentEventListenerTest {
     @DisplayName("PointDeductedEvent 수신 후 결제를 진행하고 PaymentApprovedEvent를 아웃박스에 적재하도록 호출한다")
     void handle_point_deducted_event_success() {
         // given - PointDeductedEvent JSON (userId 있음)
-        String message = "{\"orderId\":1,\"userId\":100,\"paymentAmount\":10000,\"usePoint\":1000}";
-        doNothing().when(paymentService).pay(1L, 100L, 10000L, 1000L);
+        String message = "{\"orderId\":1,\"userId\":100,\"paymentAmount\":10000,\"usePoint\":1000,\"idempotencyKey\":\"idemp-key-1\"}";
+        doNothing().when(paymentService).pay(1L, 100L, 10000L, 1000L, "idemp-key-1");
 
         // when
         paymentEventListener.handlePointDeducted(message);
 
         // then
-        verify(paymentService).pay(1L, 100L, 10000L, 1000L);
+        verify(paymentService).pay(1L, 100L, 10000L, 1000L, "idemp-key-1");
     }
 
     @Test
     @DisplayName("PointDeductedEvent 수신 후 결제 실패 시 PaymentFailedEvent를 아웃박스에 적재하도록 호출한다")
     void handle_point_deducted_event_payment_fail() {
         // given
-        String message = "{\"orderId\":1,\"userId\":100,\"paymentAmount\":10000,\"usePoint\":1000}";
-        doThrow(new RuntimeException("결제 한도 초과")).when(paymentService).pay(1L, 100L, 10000L, 1000L);
+        String message = "{\"orderId\":1,\"userId\":100,\"paymentAmount\":10000,\"usePoint\":1000,\"idempotencyKey\":\"idemp-key-2\"}";
+        doThrow(new RuntimeException("결제 한도 초과")).when(paymentService).pay(1L, 100L, 10000L, 1000L, "idemp-key-2");
 
         // when
         paymentEventListener.handlePointDeducted(message);
 
         // then
-        verify(paymentService).pay(1L, 100L, 10000L, 1000L);
-        verify(paymentService).savePaymentFailedOutbox(1L, 100L, 1000L, "결제 한도 초과");
+        verify(paymentService).pay(1L, 100L, 10000L, 1000L, "idemp-key-2");
+        verify(paymentService).savePaymentFailedOutbox(1L, 100L, 1000L, "결제 한도 초과", "idemp-key-2");
     }
 
     @Test
